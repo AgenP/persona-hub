@@ -17,6 +17,7 @@ from open_webui.config import (
     MODEL_FILTER_LIST,
     OPENAI_API_BASE_URLS,
     OPENAI_API_KEYS,
+    E2B_API_KEY,
     AppConfig,
 )
 from open_webui.constants import ERROR_MESSAGES
@@ -31,6 +32,7 @@ from open_webui.utils.misc import (
     apply_model_system_prompt_to_body,
 )
 from open_webui.utils.utils import get_admin_user, get_verified_user
+from e2b_code_interpreter import CodeInterpreter
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["OPENAI"])
@@ -343,6 +345,43 @@ async def get_models(url_idx: Optional[int] = None, user=Depends(get_verified_us
             )
 
 
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "execute_python",
+            "description": "Execute python code in a Jupyter notebook cell and returns any result, stdout, stderr, display_data, and error.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "The python code to execute in a single cell.",
+                    }
+                },
+                "required": ["code"],
+            },
+        },
+    }
+]
+
+
+def code_interpret(e2b_code_interpreter, code):
+    print("Running code interpreter...")
+    exec = e2b_code_interpreter.notebook.exec_cell(
+        code,
+        on_stderr=lambda stderr: print("[Code Interpreter]", stderr),
+        on_stdout=lambda stdout: print("[Code Interpreter]", stdout),
+        # You can also stream code execution results
+        # on_result=...
+    )
+
+    if exec.error:
+        print("[Code Interpreter ERROR]", exec.error)
+    else:
+        return exec.results
+
+
 @app.post("/chat/completions")
 @app.post("/chat/completions/{url_idx}")
 async def generate_chat_completion(
@@ -378,6 +417,9 @@ async def generate_chat_completion(
             "role": user.role,
         }
 
+    # Add tools to the payloa
+    payload["tools"] = tools
+
     # Convert the modified body back to JSON
     payload = json.dumps(payload)
 
@@ -409,6 +451,25 @@ async def generate_chat_completion(
         )
 
         r.raise_for_status()
+
+        response_message = r["choices"][0]["message"]
+        tool_calls = response_message["tool_calls"]
+
+        if tool_calls:
+            for tool_call in tool_calls:
+                function_name = tool_call["function"]["name"]
+                function_args = json.loads(tool_call["function"]["arguments"])
+
+                if function_name == "execute_python":
+                    e2b_code_interpreter = CodeInterpreter(api_key=E2B_API_KEY)
+
+                    code = function_args["code"]
+                    code_interpreter_results = code_interpret(
+                        e2b_code_interpreter, code
+                    )
+                    return code_interpreter_results
+            else:
+                raise Exception(f"Unknown tool {function_name}")
 
         # Check if response is SSE
         if "text/event-stream" in r.headers.get("Content-Type", ""):

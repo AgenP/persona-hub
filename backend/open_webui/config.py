@@ -631,6 +631,9 @@ OLLAMA_BASE_URLS = PersistentConfig(
     "OLLAMA_BASE_URLS", "ollama.base_urls", OLLAMA_BASE_URLS
 )
 
+# E2B API Key
+E2B_API_KEY = os.environ.get("E2B_API_KEY", "")
+
 ####################################
 # OPENAI_API
 ####################################

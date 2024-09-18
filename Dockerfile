@@ -12,6 +12,7 @@ ARG USE_CUDA_VER=cu121
 ARG USE_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 ARG USE_RERANKING_MODEL=""
 ARG BUILD_HASH=dev-build
+ARG WITH_CODER=true
 # Override at your own risk - non-root configurations are untested
 ARG UID=0
 ARG GID=0
@@ -132,7 +133,11 @@ RUN pip3 install uv && \
     uv pip install --system -r requirements.txt --no-cache-dir && \
     python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.environ['RAG_EMBEDDING_MODEL'], device='cpu')" && \
     python -c "import os; from faster_whisper import WhisperModel; WhisperModel(os.environ['WHISPER_MODEL'], device='cpu', compute_type='int8', download_root=os.environ['WHISPER_MODEL_DIR'])"; \
-    fi; \
+    fi && \
+    # Install e2b-code-interpreter if WITH_CODER is true (default)
+    if [ "$WITH_CODER" = "true" ]; then \
+    pip3 install e2b-code-interpreter; \   
+    fi && \
     chown -R $UID:$GID /app/backend/data/
 
 
