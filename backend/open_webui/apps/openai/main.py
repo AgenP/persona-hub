@@ -187,7 +187,7 @@ async def fetch_url(url, key):
         headers = {"Authorization": f"Bearer {key}"}
         async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
             async with session.get(url, headers=headers) as response:
-                return await response.json()
+                return await response.json(content_type="application/json")
     except Exception as e:
         # Handle connection error here
         log.error(f"Connection error: {e}")
