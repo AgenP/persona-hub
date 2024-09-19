@@ -27,10 +27,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
-from open_webui.utils.misc import (
+
+
+from open_webui.utils.payload import (
     apply_model_params_to_body_openai,
     apply_model_system_prompt_to_body,
 )
+
 from open_webui.utils.utils import get_admin_user, get_verified_user
 from e2b_code_interpreter import CodeInterpreter
 
@@ -219,7 +222,17 @@ def merge_models_lists(model_lists):
                     for model in models
                     if "api.openai.com"
                     not in app.state.config.OPENAI_API_BASE_URLS[idx]
-                    or "gpt" in model["id"]
+                    or not any(
+                        name in model["id"]
+                        for name in [
+                            "babbage",
+                            "dall-e",
+                            "davinci",
+                            "embedding",
+                            "tts",
+                            "whisper",
+                        ]
+                    )
                 ]
             )
 
@@ -322,10 +335,24 @@ async def get_models(url_idx: Optional[int] = None, user=Depends(get_verified_us
             r.raise_for_status()
 
             response_data = r.json()
+
             if "api.openai.com" in url:
-                response_data["data"] = list(
-                    filter(lambda model: "gpt" in model["id"], response_data["data"])
-                )
+                # Filter the response data
+                response_data["data"] = [
+                    model
+                    for model in response_data["data"]
+                    if not any(
+                        name in model["id"]
+                        for name in [
+                            "babbage",
+                            "dall-e",
+                            "davinci",
+                            "embedding",
+                            "tts",
+                            "whisper",
+                        ]
+                    )
+                ]
 
             return response_data
         except Exception as e:
