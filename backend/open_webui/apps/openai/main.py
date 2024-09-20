@@ -283,6 +283,9 @@ async def get_all_models(raw: Literal[False] = False) -> dict[str, list]: ...
 
 async def get_all_models(raw=False) -> dict[str, list] | list:
     log.info("get_all_models()")
+
+    log.info(f"get_all_models:len_keys {len(app.state.config.OPENAI_API_KEYS)}")
+
     if is_openai_api_disabled():
         return [] if raw else {"data": []}
 
