@@ -290,6 +290,8 @@ async def get_all_models(raw=False) -> dict[str, list] | list:
     if raw:
         return responses
 
+    log.info(f"get_all_models:responses {responses}")
+
     def extract_data(response):
         if response and "data" in response:
             return response["data"]
