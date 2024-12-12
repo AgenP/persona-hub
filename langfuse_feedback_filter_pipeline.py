@@ -135,28 +135,33 @@ class Pipeline:
         print(f"Received body: {body}")
         print(f"Processing request for user: {user['email'] if user else 'No user'}")
 
-        trace = self.langfuse.trace(
-            name=f"filter:{__name__}",
-            input=body,
-            user_id=user["email"],
-            metadata={"user_name": user["name"], "user_id": user["id"]},
-            session_id=body["chat_id"],
-        )
+        try:
+            trace = self.langfuse.trace(
+                name=f"filter:{__name__}",
+                input=body,
+                user_id=user["email"],
+                metadata={"user_name": user["name"], "user_id": user["id"]},
+                session_id=body["chat_id"],
+            )
 
-        print(f"Created Langfuse trace with ID: {trace.id}")
+            print(f"Created Langfuse trace with ID: {trace.id}")
 
-        generation = trace.generation(
-            name=body["chat_id"],
-            model=body["model"],
-            input=body["messages"],
-            metadata={"interface": "open-webui"},
-        )
+            generation = trace.generation(
+                name=body["chat_id"],
+                model=body["model"],
+                input=body["messages"],
+                metadata={"interface": "open-webui"},
+            )
 
-        self.chat_generations[body["chat_id"]] = generation
-        print(trace.get_trace_url())
-        print(f"Generation created with ID: {generation.id}")
+            self.chat_generations[body["chat_id"]] = generation
+            print(trace.get_trace_url())
+            print(f"Generation created with ID: {generation.id}")
+            return body
 
-        return body
+        except Exception as e:
+            print(f"Error in inlet processing: {e}")
+            # Still return the body even if tracking fails
+            return body
 
     async def outlet(self, body: dict, user: Optional[dict] = None) -> dict:
         print(f"outlet:{__name__}")
