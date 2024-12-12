@@ -26,7 +26,7 @@ def is_development() -> bool:
 
 
 def get_hostname() -> Optional[str]:
-    return os.getenv("WEBUI_HOSTNAME", "localhost:3000" if is_development() else None)
+    return os.getenv("WEBUI_HOSTNAME", "localhost:8080" if is_development() else None)
 
 
 # URL configurations
