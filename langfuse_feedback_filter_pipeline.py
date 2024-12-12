@@ -11,9 +11,6 @@ from utils.pipelines.main import (
     get_last_assistant_message,
 )
 
-# import the web ui api base url
-from utils.config import WEBUI_API_BASE_URL
-
 
 # Keep original environment variables
 def get_last_assistant_message_obj(messages: List[dict]) -> dict:
@@ -109,6 +106,7 @@ class Pipeline:
             response.raise_for_status()
             feedbacks = response.json()
             print(f"Successfully retrieved feedback data from API")
+            print(f"Feedback data: {feedbacks}")
 
             # Filter feedbacks for specific chat_id
             if feedbacks and "feedbacks" in feedbacks:
@@ -138,40 +136,27 @@ class Pipeline:
         print(f"Processing request for user: {user['email'] if user else 'No user'}")
 
         trace = self.langfuse.trace(
-            name="chat_completion",
-            metadata={
-                "user_id": user.get("id") if user else None,
-                "chat_id": body.get("chat_id"),
-            },
+            name=f"filter:{__name__}",
+            input=body,
+            user_id=user["email"],
+            metadata={"user_name": user["name"], "user_id": user["id"]},
+            session_id=body["chat_id"],
         )
+
         print(f"Created Langfuse trace with ID: {trace.id}")
 
-        try:
-            # Original token tracking logic
-            if "messages" in body:
-                prompt_tokens = sum(len(str(m)) for m in body["messages"])
-                trace.metadata["prompt_tokens"] = prompt_tokens
-                print(f"Calculated prompt tokens: {prompt_tokens}")
+        generation = trace.generation(
+            name=body["chat_id"],
+            model=body["model"],
+            input=body["messages"],
+            metadata={"interface": "open-webui"},
+        )
 
-            # Add feedback data if chat_id exists
-            chat_id = body.get("chat_id")
-            if chat_id and os.getenv("LANGFUSE_API_KEY"):
-                print(f"Attempting to fetch feedback for chat_id: {chat_id}")
-                feedback_data = await self._get_feedback(
-                    chat_id, os.getenv("LANGFUSE_API_KEY")
-                )
-                if feedback_data:
-                    trace.metadata["feedback_data"] = feedback_data
-                    print(f"Added feedback data to trace metadata")
+        self.chat_generations[body["chat_id"]] = generation
+        print(trace.get_trace_url())
+        print(f"Generation created with ID: {generation.id}")
 
-            return body
-        except Exception as e:
-            print(f"Error in inlet processing: {str(e)}")
-            trace.error(str(e))
-            raise
-        finally:
-            trace.end()
-            print("Inlet processing completed")
+        return body
 
     async def outlet(self, body: dict, user: Optional[dict] = None) -> dict:
         print(f"outlet:{__name__}")
@@ -203,6 +188,25 @@ class Pipeline:
                         "unit": "TOKENS",
                     }
                     print(f"Usage statistics calculated: {usage}")
+
+        # Get feedback data
+        print("Fetching feedback data")
+        feedback_data = await self._get_feedback(
+            body["chat_id"], os.getenv("LANGFUSE_API_KEY")
+        )
+        if feedback_data and feedback_data.get("feedbacks"):
+            print("Processing feedback data")
+            for feedback in feedback_data["feedbacks"]:
+                score = feedback.get("rating")
+                comment = feedback.get("comment", "")
+                # Combine the reason key and details key
+                if score is not None:
+                    generation.score(
+                        name="user_feedback",
+                        value=score,
+                        comment=comment,
+                    )
+                    print(f"Added feedback score {score} with comment: {comment}")
 
         # Update generation
         print("Updating generation with final output")
